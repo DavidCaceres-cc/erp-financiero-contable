@@ -1,0 +1,43 @@
+{
+  "name": "erp-financiero-contable",
+  "version": "1.0.0",
+  "description": "ERP Financiero Contable - Dashboard de auditoría profesional para contadores y auditores",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio"
+  },
+  "dependencies": {
+    "next": "^14.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@chakra-ui/react": "^2.8.2",
+    "@chakra-ui/next-js": "^2.2.0",
+    "@emotion/react": "^11.11.1",
+    "@emotion/styled": "^11.11.0",
+    "framer-motion": "^10.16.16",
+    "lucide-react": "^0.294.0",
+    "@prisma/client": "^5.7.1",
+    "@react-pdf/renderer": "^3.4.5",
+    "react-hook-form": "^7.49.0",
+    "zod": "^3.22.4",
+    "@hookform/resolvers": "^3.3.4",
+    "date-fns": "^2.30.0",
+    "axios": "^1.6.5",
+    "zustand": "^4.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/node": "^20.10.6",
+    "@types/react": "^18.2.46",
+    "@types/react-dom": "^18.2.18",
+    "prisma": "^5.7.1",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.4.1"
+  }
+}
