@@ -1,0 +1,287 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== USUARIOS Y ROLES ====================
+
+enum UserRole {
+  ADMIN
+  CONTADOR
+  AUDITOR
+}
+
+model User {
+  id            String     @id @default(cuid())
+  email         String     @unique
+  name          String
+  password      String
+  role          UserRole   @default(CONTADOR)
+  active        Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  
+  // Relaciones
+  partidas      Partida[]
+  auditorias    Auditoria[]
+  logs          AuditLog[]
+}
+
+// ==================== CATÁLOGO DE CUENTAS ====================
+
+enum TipoCuenta {
+  ACTIVO
+  PASIVO
+  PATRIMONIO
+  INGRESO
+  COSTO
+  GASTO
+  OTRO_INGRESO
+  OTRO_GASTO
+}
+
+enum Naturaleza {
+  DEUDORA
+  ACREEDORA
+}
+
+model CatalogoCuenta {
+  id              String     @id @default(cuid())
+  codigo          String     @unique
+  nombre          String
+  descripcion     String?
+  tipo            TipoCuenta
+  naturaleza      Naturaleza
+  esSubcuenta     Boolean    @default(false)
+  cuentaPadreId   String?
+  
+  // Campos de estado fiscal (SAT Guatemala)
+  codigoSAT       String?    @unique
+  requiereDetalles Boolean   @default(false)
+  activa          Boolean    @default(true)
+  
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  
+  // Relaciones
+  cuentaPadre     CatalogoCuenta?   @relation("SubCuentas", fields: [cuentaPadreId], references: [id])
+  subCuentas      CatalogoCuenta[]  @relation("SubCuentas")
+  
+  detallesPartida DetallePartida[]
+  saldos          SaldoCuenta[]
+}
+
+// ==================== PARTIDAS CONTABLES ====================
+
+enum EstadoPartida {
+  BORRADOR
+  EN_REVISION
+  APROBADA
+  RECHAZADA
+}
+
+model Partida {
+  id              String           @id @default(cuid())
+  numeroPartida   String           @unique
+  fecha           DateTime
+  descripcion     String
+  referencia      String?
+  estado          EstadoPartida    @default(BORRADOR)
+  
+  // Totales
+  totalDebe       Decimal          @db.Numeric(15, 2)
+  totalHaber      Decimal          @db.Numeric(15, 2)
+  
+  // Control
+  usuarioId       String
+  usuario         User             @relation(fields: [usuarioId], references: [id])
+  fechaCreacion   DateTime         @default(now())
+  fechaActualizacion DateTime      @updatedAt
+  
+  // Auditoría
+  aprobadoPor     String?
+  fechaAprobacion DateTime?
+  comentariosRechazo String?
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  
+  // Relaciones
+  detalles        DetallePartida[]
+  conciliaciones  Conciliacion[]
+  historialCambios HistorialPartida[]
+}
+
+enum TipoMovimiento {
+  DEBE
+  HABER
+}
+
+model DetallePartida {
+  id              String           @id @default(cuid())
+  partidaId       String
+  partida         Partida          @relation(fields: [partidaId], references: [id], onDelete: Cascade)
+  
+  // Cuenta contable
+  cuentaId        String
+  cuenta          CatalogoCuenta   @relation(fields: [cuentaId], references: [id])
+  
+  // Movimiento
+  tipo            TipoMovimiento
+  monto           Decimal          @db.Numeric(15, 2)
+  
+  // Detalles adicionales
+  concepto        String?
+  referencia      String?
+  centro          String?          // Centro de costos
+  proyecto        String?          // Código de proyecto
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  
+  @@unique([partidaId, cuentaId, tipo])
+}
+
+// ==================== SALDOS Y ESTADOS CONTABLES ====================
+
+model SaldoCuenta {
+  id              String           @id @default(cuid())
+  cuentaId        String
+  cuenta          CatalogoCuenta   @relation(fields: [cuentaId], references: [id])
+  
+  periodo         String           // Formato: "YYYY-MM"
+  saldoAnterior   Decimal          @db.Numeric(15, 2)
+  movimientoDebe  Decimal          @db.Numeric(15, 2) @default(0)
+  movimientoHaber Decimal          @db.Numeric(15, 2) @default(0)
+  saldoActual     Decimal          @db.Numeric(15, 2)
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  
+  @@unique([cuentaId, periodo])
+}
+
+// ==================== CONCILIACIÓN ====================
+
+enum EstadoConciliacion {
+  PENDIENTE
+  CONCILIADA
+  DISCREPANCIA
+}
+
+model Conciliacion {
+  id              String           @id @default(cuid())
+  numeroRef       String           @unique
+  
+  // Partida origen
+  partidaId       String
+  partida         Partida          @relation(fields: [partidaId], references: [id])
+  
+  // Información de conciliación
+  estado          EstadoConciliacion @default(PENDIENTE)
+  descripcion     String?
+  montoOriginal   Decimal          @db.Numeric(15, 2)
+  montoReconciliado Decimal        @db.Numeric(15, 2)
+  
+  // Documentos de soporte
+  documentoRef    String?
+  fechaDocumento  DateTime?
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+// ==================== AUDITORÍA Y CONTROL ====================
+
+model AuditLog {
+  id              String     @id @default(cuid())
+  usuarioId       String
+  usuario         User       @relation(fields: [usuarioId], references: [id])
+  
+  accion          String
+  tabla           String
+  recordId        String
+  cambiosAntes    Json?
+  cambiosDespues  Json?
+  
+  ipAddress       String?
+  userAgent       String?
+  
+  createdAt       DateTime   @default(now())
+  
+  @@index([usuarioId])
+  @@index([tabla])
+  @@index([recordId])
+}
+
+model Auditoria {
+  id              String     @id @default(cuid())
+  numeroAuditoria String     @unique
+  titulo          String
+  descripcion     String?
+  
+  auditorId       String
+  auditor         User       @relation(fields: [auditorId], references: [id])
+  
+  fechaInicio     DateTime
+  fechaFin        DateTime?
+  estado          String     @default("EN_PROGRESO")
+  
+  hallazgos       Json?
+  recomendaciones Json?
+  
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+model HistorialPartida {
+  id              String     @id @default(cuid())
+  partidaId       String
+  partida         Partida    @relation(fields: [partidaId], references: [id], onDelete: Cascade)
+  
+  estadoAnterior  String
+  estadoNuevo     String
+  razon           String?
+  cambios         Json?
+  
+  createdAt       DateTime   @default(now())
+}
+
+// ==================== CONFIGURACIÓN Y PARÁMETROS ====================
+
+model ConfiguracionERP {
+  id              String     @id @default(cuid())
+  clave           String     @unique
+  valor           String
+  tipo            String     // STRING, NUMBER, BOOLEAN, JSON
+  descripcion     String?
+  
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+model Empresa {
+  id              String     @id @default(cuid())
+  nombre          String
+  ruc             String     @unique
+  nit             String?
+  direccion       String?
+  telefono        String?
+  email           String?
+  
+  logo            String?
+  coloresPrimarios Json?
+  
+  periodoContable String     // Formato: "YYYY-MM"
+  tipoMoneda      String     @default("GTQ")
+  
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
